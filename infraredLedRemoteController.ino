@@ -1,8 +1,5 @@
-//========================================================
-// File Name: ir_controller
-// URL      : http://make.bcde.jp
-//========================================================
-#include "types.h"
+#include <WiFi.h>
+#include <WebServer.h>
 
 //========================================================
 // Config
@@ -12,152 +9,86 @@
 #define IR_IN                  (5)       /* Input      */
 #define IR_OUT                 (16)      /* Output     */
 
-#define TIMEOUT_RECV_NOSIGNAL  (50000)
-#define TIMEOUT_RECV           (5000000)
-#define TIMEOUT_SEND           (2000000)
-
 //========================================================
 // Define
 //========================================================
-#define STATE_NONE             (-1)
-#define STATE_OK               (0)
-#define STATE_TIMEOUT          (1)
-#define STATE_OVERFLOW         (2)
+
 #define DATA_SIZE              (800)
 
 //========================================================
 // Program
 //========================================================
-u2 data[DATA_SIZE];
 
-void sendSignal(){
-  u1 x;
-  s1 state = STATE_NONE;
-  u2 time = 0;
-  u4 tmp = 0;
-  u4 index = 0;
-  u4 count = 0;
-  u4 us = 0;
-  
-  us = micros();
-  
-  while(state == STATE_NONE){
-    if(Serial.available() == 0){
-      if((micros() - us) > TIMEOUT_SEND){
-        state = STATE_TIMEOUT;
-        break;
-      }
-    } else {
-      x = Serial.read();
-      if(x>='0' && x<='9'){
-        /* 数字を受信した場合 */
-        tmp *= 10;
-        tmp += x - '0';
-      } else {
-        /* 数字以外を受信した場合 */
-        if((tmp == 0) && (index == 0)){
-          /* 最初の一文字目は読み飛ばす */
-        } else {
-          data[index] = (u2)tmp;
-          if(tmp == 0){
-            state = STATE_OK;
-            break;
-          } else if(index >= DATA_SIZE){
-            state = STATE_OVERFLOW;
-            break;
-          }
-          index++;
-        }
-        tmp = 0;
-      }
-    }
-  }
+// const char* ssid = "****";
+// const char* password = "****";
 
-  if(state == STATE_OK){
-    for(count = 0; count < index; count++){
-      time = data[count];
-      us = micros();
-      do {
-        digitalWrite(IR_OUT, !(count&1));
-        delayMicroseconds(11);
-        digitalWrite(IR_OUT, 0);
-        delayMicroseconds(10);
-      }while(s4(us + time - micros()) > 0);
-    }
-    Serial.println("OK");
-  } else {
-    Serial.print("NG:");
-    Serial.println(state);
+String target = "Initial String";
+
+// WiFiServer server(80);
+WebServer server(80);
+
+void toWhite() {
+  int data[] = {3575,1653,478,392,502,370,473,1262,503,1238,478,393,501,1238,505,364,501,372,500,371,500,1241,497,370,476,392,500,1239,502,367,499,1241,478,392,501,1237,501,370,476,395,499,1238,503,1236,478,1260,504,371,478,390,474,395,475,1266,498,371,499,1238,476,395,502,369,500,371,475,1263,478,1261,501,1238,503,370,499,370,475,1262,479,1260,477,395,500,1235,504};
+  int num_data = sizeof(data)/sizeof(data[0]);
+  turn(data, num_data);
+}
+
+void toOrange() {
+  int data[] = {3547,1682,500,369,471,399,472,1265,473,1270,473,394,471,1271,471,399,444,426,447,422,447,1291,448,424,447,420,472,1269,449,420,472,1269,471,398,474,1264,449,424,472,397,473,1265,449,1289,448,1292,472,399,446,423,447,1294,448,1291,447,423,446,1293,448,422,448,421,473,398,470,1268,449,423,446,1291,448,424,446,424,449,1288,448,1292,470,401,470,1267,471};
+  int num_data = sizeof(data)/sizeof(data[0]);
+  turn(data, num_data);
+}
+
+void turn(int data[], int num_data) {
+  unsigned short time = 0;
+  signed long us = 0;
+
+   for(int count = 0; count < num_data; count++){
+    time = data[count];
+    us = micros();
+    do {
+      digitalWrite(IR_OUT, !(count&1));
+      delayMicroseconds(11);
+      digitalWrite(IR_OUT, 0);
+      delayMicroseconds(10);
+    } while ((signed long)(us + time - micros()) > 0);
   }
 }
 
-void recvSignal(){
-  
-  u1 pre_value = HIGH;
-  u1 now_value = HIGH;
-  u1 wait_flag = TRUE;
-  s1 state = STATE_NONE;
-  u4 pre_us = micros();
-  u4 now_us = 0;
-  u4 index = 0;
-  u4 i = 0;
-  
-  while(state == STATE_NONE){
-    now_value = digitalRead(IR_IN);
-    if(pre_value != now_value){
-      now_us = micros();
-      if(!wait_flag){
-        data[index++] = now_us - pre_us;
-      }
-      wait_flag = FALSE;
-      pre_value = now_value;
-      pre_us = now_us;
-    }
-    
-    if(wait_flag){
-        if((micros() - pre_us) > TIMEOUT_RECV){
-          state = STATE_TIMEOUT;
-          break;
-        }
-      } else {
-        if((micros() - pre_us) > TIMEOUT_RECV_NOSIGNAL){
-          state = STATE_OK;
-          break;
-        }
-      }
-  }
-  
-  if(state == STATE_OK){
-    Serial.print("s,");
-    for(i = 0; i<index; i++){
-      Serial.print(data[i]);
-      Serial.print(',');
-    }
-    Serial.println("0,");
-  } else {
-    Serial.println("NG");
-  }
-}
-
-void setup(){
+void setup() {
   Serial.begin(SERIAL_BPS);
+
   pinMode(IR_IN, INPUT);
   pinMode(IR_OUT, OUTPUT);
+
+  WiFi.begin(ssid, password);
+  Serial.println("Connecting");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.print("Connected to WiFi network with IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  Serial.println("Timer set to 5 seconds (timerDelay variable), it will take 5 seconds before publishing the first reading.");
+
+  server.on("/target", HTTP_ANY, [](){
+    if (server.method() == HTTP_POST) { // POSTメソッドでアクセスされた場合
+      target = server.arg("plain"); // server.arg("plain")でリクエストボディが取れる
+      toWhite();
+    }
+    server.send(200, "text/plain", target); // 値をクライアントに返す
+  });
+
+  // 登録されてないパスにアクセスがあった場合
+  server.onNotFound([](){
+    server.send(404, "text/plain", "Not Found."); // 404を返す
+  });
+
+  server.begin();
 }
 
-void loop(){
-  u1 x;
-  if(Serial.available()){
-    x=Serial.read();
-    switch(x){
-      case 's':
-        sendSignal();
-        break;
-      case 'r':
-        recvSignal();
-        break;
-      default:
-        break;
-    }
-  }
+void loop() {
+  server.handleClient();
 }
