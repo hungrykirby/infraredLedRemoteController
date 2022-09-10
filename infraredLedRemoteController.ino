@@ -1,5 +1,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
+// https://github.com/arduino-libraries/Arduino_JSON
+#include <Arduino_JSON.h>
 
 //========================================================
 // Config
@@ -19,12 +21,21 @@
 // Program
 //========================================================
 
-// const char* ssid = "****";
-// const char* password = "****";
+/* 
+こういう感じに関数を env.ino に定義して使う
 
-String target = "Initial String";
+char* wifi_ssid() {
+  return "****";
+}
 
-// WiFiServer server(80);
+char* wifi_password() {
+  return "****";
+}
+
+*/
+
+String body = "Initial String";
+
 WebServer server(80);
 
 void toWhite() {
@@ -56,6 +67,9 @@ void turn(int data[], int num_data) {
 }
 
 void setup() {
+  char* ssid = wifi_ssid();
+  char* password = wifi_password();
+
   Serial.begin(SERIAL_BPS);
 
   pinMode(IR_IN, INPUT);
@@ -73,12 +87,21 @@ void setup() {
 
   Serial.println("Timer set to 5 seconds (timerDelay variable), it will take 5 seconds before publishing the first reading.");
 
-  server.on("/target", HTTP_ANY, [](){
+  server.on("/control", HTTP_ANY, [](){
     if (server.method() == HTTP_POST) { // POSTメソッドでアクセスされた場合
-      target = server.arg("plain"); // server.arg("plain")でリクエストボディが取れる
-      toWhite();
+      body = server.arg("plain"); // server.arg("plain")でリクエストボディが取れる
+      JSONVar json;
+      json = JSON.parse(body);
+      if(json.hasOwnProperty("color")) {
+        if( String((const char*)json["color"]) == "white") {
+          toWhite();
+        } else if((const char*)json["color"] == "orange") {
+          toOrange();
+        }
+      }
+      Serial.println((const char*)json["color"]);
     }
-    server.send(200, "text/plain", target); // 値をクライアントに返す
+    server.send(200, "text/plain", body); // 値をクライアントに返す
   });
 
   // 登録されてないパスにアクセスがあった場合
