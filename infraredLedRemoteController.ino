@@ -95,7 +95,7 @@ void setup() {
       if(json.hasOwnProperty("color")) {
         if( String((const char*)json["color"]) == "white") {
           toWhite();
-        } else if((const char*)json["color"] == "orange") {
+        } else if( String((const char*)json["color"]) == "orange") {
           toOrange();
         }
       }
