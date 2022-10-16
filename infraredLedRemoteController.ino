@@ -50,6 +50,35 @@ void toOrange() {
   turn(data, num_data);
 }
 
+int receiveSignals(String signals) {
+  String dst[100] = {"\0"}; // 十分に大きい配列を用意
+  
+  int index = 0;
+  // arraySizeのロジックを追加すると-1が返ってしまうため削除した
+  // https://gangannikki.hatenadiary.jp/entry/2019/01/24/154015
+  // 動くはずなんだが....
+  // int arraySize = (sizeof(signals)/sizeof(signals[0]));  
+  unsigned long signalslength = signals.length();
+  // Serial.println((String) arraySize);
+  Serial.println((String) signalslength);
+  for (int i = 0; i < signalslength; i++) {
+    char tmp = signals.charAt(i);
+    if ( tmp == ',' ) {
+      index++;
+      // if ( index > (arraySize - 1)) return -1;
+    }
+    else dst[index] += tmp;
+  }
+
+  int data[100] = {-1};
+  for(int i = 0; i <= index; i++) {
+    // Serial.println(dst[i]);
+    data[i] = dst[i].toInt();
+  }
+  turn(data, index + 1);
+  return (index + 1);
+}
+
 void turn(int data[], int num_data) {
   unsigned short time = 0;
   signed long us = 0;
@@ -88,10 +117,12 @@ void setup() {
   Serial.println("Timer set to 5 seconds (timerDelay variable), it will take 5 seconds before publishing the first reading.");
 
   server.on("/control", HTTP_ANY, [](){
+    int result = 0;
     if (server.method() == HTTP_POST) { // POSTメソッドでアクセスされた場合
       body = server.arg("plain"); // server.arg("plain")でリクエストボディが取れる
       JSONVar json;
       json = JSON.parse(body);
+      
       if(json.hasOwnProperty("color")) {
         if( String((const char*)json["color"]) == "white") {
           toWhite();
@@ -99,9 +130,12 @@ void setup() {
           toOrange();
         }
       }
-      Serial.println((const char*)json["color"]);
+      if(json.hasOwnProperty("signals")) {
+        result = receiveSignals(String((const char*)json["signals"]));
+      }
+      // Serial.println((const char*)json["color"]);
     }
-    server.send(200, "text/plain", body); // 値をクライアントに返す
+    server.send(200, "text/plain", (String) result + "\n"); // 値をクライアントに返す
   });
 
   // 登録されてないパスにアクセスがあった場合
