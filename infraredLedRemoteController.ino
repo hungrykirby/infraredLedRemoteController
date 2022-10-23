@@ -51,16 +51,24 @@ void toOrange() {
 }
 
 int receiveSignals(String signals) {
-  String dst[100] = {"\0"}; // 十分に大きい配列を用意
-  
   int index = 0;
   // arraySizeのロジックを追加すると-1が返ってしまうため削除した
   // https://gangannikki.hatenadiary.jp/entry/2019/01/24/154015
   // 動くはずなんだが....
   // int arraySize = (sizeof(signals)/sizeof(signals[0]));  
   unsigned long signalslength = signals.length();
-  // Serial.println((String) arraySize);
-  Serial.println((String) signalslength);
+
+  // 配列を初期化するために長さをはかる
+  for (int i = 0; i < signalslength; i++) {
+    char tmp = signals.charAt(i);
+    if ( tmp == ',' ) {
+      index++;
+    }
+  }
+
+  String dst[index + 1] = {"\0"};
+  index = 0; // 再度oにする
+
   for (int i = 0; i < signalslength; i++) {
     char tmp = signals.charAt(i);
     if ( tmp == ',' ) {
@@ -70,7 +78,7 @@ int receiveSignals(String signals) {
     else dst[index] += tmp;
   }
 
-  int data[100] = {-1};
+  int data[index + 1] = {-1};
   for(int i = 0; i <= index; i++) {
     // Serial.println(dst[i]);
     data[i] = dst[i].toInt();
