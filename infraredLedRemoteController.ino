@@ -171,12 +171,20 @@ void setup() {
 
   server.on("/control", HTTP_ANY, [](){
     int result = 0;
+    int signalsCount = 1;
     if (server.method() == HTTP_POST) { // POSTメソッドでアクセスされた場合
       body = server.arg("plain"); // server.arg("plain")でリクエストボディが取れる
       JSONVar json;
       json = JSON.parse(body);
       if(json.hasOwnProperty("signals")) {
-        result = receiveSignals(String((const char*)json["signals"]));
+        if (json.hasOwnProperty("count")){
+          signalsCount = (String((const char*)json["count"])).toInt();
+          result = signalsCount;
+        }
+        for(int i = 0; i < signalsCount; i++){
+          receiveSignals(String((const char*)json["signals"]));
+          if (signalsCount > 1) delay(100);
+        }
       }
     }
     server.send(200, "text/plain", (String) result + "\n"); // 値をクライアントに返す
