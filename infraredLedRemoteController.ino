@@ -10,11 +10,17 @@
 #define SERIAL_BPS             (57600)   /* Serial bps */
 #define IR_IN                  (5)       /* Input      */
 #define IR_OUT                 (16)      /* Output     */
+#define TIMEOUT_RECV_NOSIGNAL  (50000)
+#define TIMEOUT_RECV           (5000000)
+#define TIMEOUT_SEND           (2000000)
 
 //========================================================
 // Define
 //========================================================
-
+#define STATE_NONE             (-1)
+#define STATE_OK               (0)
+#define STATE_TIMEOUT          (1)
+#define STATE_OVERFLOW         (2)
 #define DATA_SIZE              (800)
 
 //========================================================
@@ -35,8 +41,60 @@ char* wifi_password() {
 */
 
 String body = "Initial String";
+unsigned short recData[DATA_SIZE];
 
 WebServer server(80);
+
+String recvSignal(){
+  
+  unsigned char pre_value = HIGH;
+  unsigned char now_value = HIGH;
+  // true -> 1 , false -> 0
+  unsigned char wait_flag = 1;
+  signed char state = STATE_NONE;
+  unsigned long pre_us = micros();
+  unsigned long now_us = 0;
+  unsigned long index = 0;
+  unsigned long i = 0;
+
+  String result = "";
+  
+  while(state == STATE_NONE){
+    now_value = digitalRead(IR_IN);
+    if(pre_value != now_value){
+      now_us = micros();
+      if(!wait_flag){
+        recData[index++] = now_us - pre_us;
+      }
+      wait_flag = 0;
+      pre_value = now_value;
+      pre_us = now_us;
+    }
+    
+    if(wait_flag){
+      if((micros() - pre_us) > TIMEOUT_RECV){
+        state = STATE_TIMEOUT;
+        break;
+      }
+    } else {
+      if((micros() - pre_us) > TIMEOUT_RECV_NOSIGNAL){
+        state = STATE_OK;
+        break;
+      }
+    }
+  }
+  
+  if(state == STATE_OK){
+    for(i = 0; i < index; i++){
+      result += (String) recData[i];
+      result += ",";
+    }
+    result += "0,";
+  } else {
+    result = "NG";
+  }
+  return result;
+}
 
 int receiveSignals(String signals) {
   int index = 0;
@@ -113,15 +171,38 @@ void setup() {
 
   server.on("/control", HTTP_ANY, [](){
     int result = 0;
+    int signalsCount = 1;
     if (server.method() == HTTP_POST) { // POSTメソッドでアクセスされた場合
       body = server.arg("plain"); // server.arg("plain")でリクエストボディが取れる
       JSONVar json;
       json = JSON.parse(body);
       if(json.hasOwnProperty("signals")) {
-        result = receiveSignals(String((const char*)json["signals"]));
+        if (json.hasOwnProperty("count")){
+          signalsCount = (String((const char*)json["count"])).toInt();
+          result = signalsCount;
+        }
+        for(int i = 0; i < signalsCount; i++){
+          receiveSignals(String((const char*)json["signals"]));
+          if (signalsCount > 1) delay(100);
+        }
       }
     }
     server.send(200, "text/plain", (String) result + "\n"); // 値をクライアントに返す
+  });
+
+  server.on("/record", HTTP_ANY, [](){
+    String result = "";
+    if (server.method() == HTTP_POST) { // POSTメソッドでアクセスされた場合
+      body = server.arg("plain"); // server.arg("plain")でリクエストボディが取れる
+      JSONVar json;
+      json = JSON.parse(body);
+      if(json.hasOwnProperty("mode")) {
+        if (String((const char*)json["mode"]) == "record") {
+          result = recvSignal();
+        } 
+      }
+    }
+    server.send(200, "text/plain", result + "\n"); // 値をクライアントに返す
   });
 
   // 登録されてないパスにアクセスがあった場合
