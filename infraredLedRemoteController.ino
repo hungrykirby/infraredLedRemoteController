@@ -182,7 +182,7 @@ void setup() {
       JSONVar json;
       json = JSON.parse(body);
       if(json.hasOwnProperty("signals")) {
-        result += ",signals";
+        result += "signals";
         if (json.hasOwnProperty("count")){
           int tmpCount = (String((const char*)json["count"])).toInt();
           if (tmpCount > 0) {
