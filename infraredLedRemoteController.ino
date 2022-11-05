@@ -171,25 +171,34 @@ void setup() {
 
   Serial.println("Timer set to 5 seconds (timerDelay variable), it will take 5 seconds before publishing the first reading.");
 
+  /*
+   * 赤外線LEDを操作するリクエストを処理する
+   */
   server.on("/control", HTTP_ANY, [](){
-    int result = 0;
+    String result = "";
     int signalsCount = 1;
     if (server.method() == HTTP_POST) { // POSTメソッドでアクセスされた場合
       body = server.arg("plain"); // server.arg("plain")でリクエストボディが取れる
       JSONVar json;
       json = JSON.parse(body);
       if(json.hasOwnProperty("signals")) {
+        result += ",signals";
         if (json.hasOwnProperty("count")){
-          signalsCount = (String((const char*)json["count"])).toInt();
-          result = signalsCount;
+          int tmpCount = (String((const char*)json["count"])).toInt();
+          if (tmpCount > 0) {
+            signalsCount = tmpCount;
+            result += ",count";
+          }
         }
         int msec_after_in = MSEC_IN_DEFAULT;
         int msec_after_out = MSEC_OUT_DEFAULT;
         if (json.hasOwnProperty("msecin")){
           msec_after_in = (String((const char*)json["msecin"])).toInt();
+          result += ",msecin";
         }
         if (json.hasOwnProperty("msecout")){
           msec_after_out = (String((const char*)json["msecout"])).toInt();
+          result += ",msecout";
         }
         for(int i = 0; i < signalsCount; i++){
           receiveSignals(String((const char*)json["signals"]), msec_after_in, msec_after_out);
@@ -200,10 +209,14 @@ void setup() {
     server.send(200, "text/plain", (String) result + "\n"); // 値をクライアントに返す
   });
 
+  /*
+   * センサーが受けた信号を変換してクライアントに返す
+   * 最後の ,0 は必要なさそう（実際に送信するときは使わない）
+   */
   server.on("/record", HTTP_ANY, [](){
     String result = "";
-    if (server.method() == HTTP_POST) { // POSTメソッドでアクセスされた場合
-      body = server.arg("plain"); // server.arg("plain")でリクエストボディが取れる
+    if (server.method() == HTTP_POST) {
+      body = server.arg("plain");
       JSONVar json;
       json = JSON.parse(body);
       if(json.hasOwnProperty("mode")) {
@@ -212,7 +225,7 @@ void setup() {
         } 
       }
     }
-    server.send(200, "text/plain", result + "\n"); // 値をクライアントに返す
+    server.send(200, "text/plain", result + "\n");
   });
 
   // 登録されてないパスにアクセスがあった場合
