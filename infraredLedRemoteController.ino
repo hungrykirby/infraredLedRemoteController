@@ -22,6 +22,8 @@
 #define STATE_TIMEOUT          (1)
 #define STATE_OVERFLOW         (2)
 #define DATA_SIZE              (800)
+#define MSEC_IN_DEFAULT        (11)
+#define MSEC_OUT_DEFAULT       (10)
 
 //========================================================
 // Program
@@ -96,7 +98,7 @@ String recvSignal(){
   return result;
 }
 
-int receiveSignals(String signals) {
+int receiveSignals(String signals, int msec_after_in, int msec_after_out) {
   int index = 0;
   // arraySizeのロジックを追加すると-1が返ってしまうため削除した
   // https://gangannikki.hatenadiary.jp/entry/2019/01/24/154015
@@ -128,11 +130,11 @@ int receiveSignals(String signals) {
   for(int i = 0; i <= index; i++) {
     data[i] = dst[i].toInt();
   }
-  turn(data, index + 1);
+  turn(data, index + 1, msec_after_in, msec_after_out);
   return (index + 1);
 }
 
-void turn(int data[], int num_data) {
+void turn(int data[], int num_data, int msec_after_in, int msec_after_out) {
   unsigned short time = 0;
   signed long us = 0;
 
@@ -141,9 +143,9 @@ void turn(int data[], int num_data) {
     us = micros();
     do {
       digitalWrite(IR_OUT, !(count&1));
-      delayMicroseconds(11);
+      delayMicroseconds(msec_after_in);
       digitalWrite(IR_OUT, 0);
-      delayMicroseconds(10);
+      delayMicroseconds(msec_after_out);
     } while ((signed long)(us + time - micros()) > 0);
   }
 }
@@ -169,20 +171,37 @@ void setup() {
 
   Serial.println("Timer set to 5 seconds (timerDelay variable), it will take 5 seconds before publishing the first reading.");
 
+  /*
+   * 赤外線LEDを操作するリクエストを処理する
+   */
   server.on("/control", HTTP_ANY, [](){
-    int result = 0;
+    String result = "";
     int signalsCount = 1;
     if (server.method() == HTTP_POST) { // POSTメソッドでアクセスされた場合
       body = server.arg("plain"); // server.arg("plain")でリクエストボディが取れる
       JSONVar json;
       json = JSON.parse(body);
       if(json.hasOwnProperty("signals")) {
+        result += "signals";
         if (json.hasOwnProperty("count")){
-          signalsCount = (String((const char*)json["count"])).toInt();
-          result = signalsCount;
+          int tmpCount = (String((const char*)json["count"])).toInt();
+          if (tmpCount > 0) {
+            signalsCount = tmpCount;
+            result += ",count";
+          }
+        }
+        int msec_after_in = MSEC_IN_DEFAULT;
+        int msec_after_out = MSEC_OUT_DEFAULT;
+        if (json.hasOwnProperty("msecin")){
+          msec_after_in = (String((const char*)json["msecin"])).toInt();
+          result += ",msecin";
+        }
+        if (json.hasOwnProperty("msecout")){
+          msec_after_out = (String((const char*)json["msecout"])).toInt();
+          result += ",msecout";
         }
         for(int i = 0; i < signalsCount; i++){
-          receiveSignals(String((const char*)json["signals"]));
+          receiveSignals(String((const char*)json["signals"]), msec_after_in, msec_after_out);
           if (signalsCount > 1) delay(100);
         }
       }
@@ -190,10 +209,14 @@ void setup() {
     server.send(200, "text/plain", (String) result + "\n"); // 値をクライアントに返す
   });
 
+  /*
+   * センサーが受けた信号を変換してクライアントに返す
+   * 最後の ,0 は必要なさそう（実際に送信するときは使わない）
+   */
   server.on("/record", HTTP_ANY, [](){
     String result = "";
-    if (server.method() == HTTP_POST) { // POSTメソッドでアクセスされた場合
-      body = server.arg("plain"); // server.arg("plain")でリクエストボディが取れる
+    if (server.method() == HTTP_POST) {
+      body = server.arg("plain");
       JSONVar json;
       json = JSON.parse(body);
       if(json.hasOwnProperty("mode")) {
@@ -202,7 +225,7 @@ void setup() {
         } 
       }
     }
-    server.send(200, "text/plain", result + "\n"); // 値をクライアントに返す
+    server.send(200, "text/plain", result + "\n");
   });
 
   // 登録されてないパスにアクセスがあった場合
